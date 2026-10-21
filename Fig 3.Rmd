@@ -1,0 +1,402 @@
+---
+title: "Fig. 3 and S3"
+output: html_notebook
+---
+
+```{r}
+
+library(ggplot2)
+library(Rmisc)
+library(readxl)
+library(readr)
+library(dplyr)
+source("path/to/Kinematics methods.R")
+
+```
+
+```{r}
+
+output_dir = "/output/directory/"
+
+```
+
+```{r}
+
+#cx.shi.full is generated in the notebook for the gigure 3 files..
+PFN.shi = cx.shi.full[grep("Empty|PFNa|PFNd|PFNv",names(cx.shi.full))]
+
+```
+
+```{r}
+
+exp.length = 32.63 * 15
+
+start.frame = 6700
+
+end.frame = start.frame + exp.length -1
+
+PFNd.31c.plots = colored_path_plot(cx.shi.full$`PFNd 31C Counterclockwise 03`,1,c("Driver","Temperature","Stimulus","Replicate"),start.frame,end.frame)
+
+PFNd.31c.plots[[3]]
+
+start.frame = 9900
+end.frame = start.frame + exp.length -1
+
+PFNd.21c.plots = colored_path_plot(cx.shi.full$`PFNd 21C Counterclockwise 06`,1,c("Driver","Temperature","Stimulus","Replicate"),start.frame,end.frame)
+
+PFNd.21c.plots[[3]]
+
+```
+
+```{r}
+
+PFN.bouts = per_bouts_matrix(PFN.shi,c("Driver","Temperature","Stimulus","Replicate"),1,10*60*32.63,30)
+PFN.bouts.summary = bouts_matrix(PFN.shi,c("Driver","Temperature","Stimulus","Replicate"),1,10*60*32.63,30)
+
+```
+
+```{r}
+
+PFN.bouts.corrected = PFN.bouts
+PFN.bouts.corrected$mean_ang_vel[which(PFN.bouts.corrected$Stimulus == "Clockwise")] = -PFN.bouts.corrected$mean_ang_vel[which(PFN.bouts.corrected$Stimulus == "Clockwise")]
+
+PFN.bouts.31 = PFN.bouts.corrected[grep("31C",PFN.bouts.corrected$Temperature),]
+PFN.bouts.21 = PFN.bouts.corrected[grep("21C",PFN.bouts.corrected$Temperature),]
+
+
+PFN.bouts.summary.corrected = PFN.bouts.summary
+PFN.bouts.summary.corrected$mean_ang_vel[which(PFN.bouts.summary.corrected$Stimulus == "Clockwise")] = -PFN.bouts.summary.corrected$mean_ang_vel[which(PFN.bouts.summary.corrected$Stimulus == "Clockwise")]
+
+PFN.bouts.summary.corrected = PFN.bouts.summary
+PFN.bouts.summary.corrected$mean_ang_vel[which(PFN.bouts.summary.corrected$Stimulus == "Clockwise")] = -PFN.bouts.summary.corrected$mean_ang_vel[which(PFN.bouts.summary.corrected$Stimulus == "Clockwise")]
+
+PFN.bouts.summary.corrected$curvature[which(PFN.bouts.summary.corrected$Stimulus == "Clockwise")] = -PFN.bouts.summary.corrected$curvature[which(PFN.bouts.summary.corrected$Stimulus == "Clockwise")]
+
+PFN.bouts.summary.31 = PFN.bouts.summary.corrected[grep("31C",PFN.bouts.summary.corrected$Temperature),]
+
+
+```
+
+```{r}
+
+x = PFN.bouts.summary.corrected  %>%
+  mutate(Driver=factor(Driver, levels = c("Empty","PFNa","PFNv","PFNd")) )
+
+pfn.ang.box = ggplot(x, aes(x = Driver, fill = Temperature, y = mean_ang_vel))+
+  geom_boxplot()+
+  geom_point(aes(fill = Temperature), size = 1, shape = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#8491B450","#d1495b"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+pfn.ang.var.box = ggplot(x, aes(x = Driver, fill = Temperature, y = ang_var))+
+  geom_boxplot()+
+  geom_point(aes(fill = Temperature), size = 1, shape = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#8491B450","#d1495b"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+
+
+
+setwd(output_dir)
+
+ggsave(filename = "PFN angular velocity boxplot.svg", plot = pfn.ang.box, width = 4,height = 4)
+ggsave(filename = "PFN translational velocity boxplot.svg", plot = pfn.trans.box, width = 4,height = 4)
+ggsave(filename = "PFN angular variance boxplot.svg", plot = pfn.ang.var.box, width = 4,height = 4)
+
+
+```
+
+
+```{r}
+
+pfn.timecourse = timecourse_matrix_per_bout(PFN.shi,c("Driver","Temperature","Stimulus","Replicate"),1,10*60*32.63,30)
+
+pfn.timecourse$ang_vel[which(pfn.timecourse$Stimulus == "Clockwise")] = -pfn.timecourse$ang_vel[which(pfn.timecourse$Stimulus == "Clockwise")] 
+
+```
+
+```{r}
+
+pfn.timecourse.summary = summarySE(data = pfn.timecourse,
+                                   measurevar = "ang_vel",
+                                   groupvars = c("Driver","Temperature","time"),
+                                   na.rm = TRUE)
+
+pfn.timecourse.summary = pfn.timecourse.summary[which(pfn.timecourse.summary$N>10),]
+
+
+pfn.timecourse.summary.31 = subset(pfn.timecourse.summary,subset = Temperature == "31C")
+pfn.timecourse.summary.21 = subset(pfn.timecourse.summary,subset = Temperature == "21C")
+
+```
+
+```{r}
+
+var.over.time.31 = ggplot(pfn.timecourse.summary.31, aes(x = time,y=sd*sd,color = Driver))+
+  geom_line()+
+  theme_minimal()+
+  scale_x_continuous(trans='log10')
+
+var.over.time.21 = ggplot(pfn.timecourse.summary.21, aes(x = time,y=sd*sd,color = Driver))+
+  geom_line()+
+  theme_minimal()+
+  scale_x_continuous(trans='log10')
+
+var.over.time.31
+
+
+setwd(output_dir)
+
+ggsave(filename = "PFN 21 variance over time.svg", plot = var.over.time.21, width = 4,height = 4)
+ggsave(filename = "PFN 31 variance over time.svg", plot = var.over.time.31, width = 4,height = 4)
+
+```
+
+```{r}
+
+pfnd.vs.wt.duration.hist =  ggplot(pfnd.bouts.31, aes(x = bout_duration, fill = Driver))+
+                                geom_density(alpha = 0.3, color = NA)+
+                                theme_minimal()+
+                                scale_x_continuous(trans='log10')
+
+pfnd.vs.wt.distance.hist =  ggplot(pfnd.bouts.31, aes(x = bout_length, fill = Driver))+
+                                geom_density(alpha = 0.3, color = NA)+
+                                theme_minimal()+
+                                scale_x_continuous(trans='log10')
+
+setwd(output_dir)
+
+ggsave(plot = pfnd.vs.wt.duration.hist, file = "PFNd bout duration histogram.svg",width = 5,height = 4)
+
+ggsave(plot = pfnd.vs.wt.distance.hist, file = "PFNd bout distance histogram.svg",width = 5,height = 4)
+
+
+```
+
+```{r}
+
+set.seed(100)
+
+PFN.bouts.31.subset = PFN.bouts.31[sample(c(1:nrow(PFN.bouts.31)),1000),]
+table(PFN.bouts.31.subset$Driver)
+
+DunnettTest(PFN.bouts.31.subset$bout_duration,PFN.bouts.31.subset$Driver)
+DunnettTest(PFN.bouts.31.subset$bout_length,PFN.bouts.31.subset$Driver)
+
+```
+
+S3 panels:
+
+```{r supplement}
+
+x = PFN.bouts.summary.corrected  %>%
+  mutate(Driver=factor(Driver, levels = c("Empty","PFNa","PFNv","PFNd")) )
+
+pfn.trans.box = ggplot(x, aes(x = Driver, fill = Temperature, y = mean_trans_vel))+
+  geom_boxplot()+
+  geom_point(aes(fill = Temperature), size = 1, shape = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#8491B450","#d1495b"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15),
+        legend.position = 'none')
+
+pfn.nbouts.box = ggplot(x, aes(x = Driver, fill = Temperature, y = nBouts))+
+  geom_boxplot()+
+  geom_point(aes(fill = Temperature), size = 1, shape = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#8491B450","#d1495b"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15),
+        legend.position = 'none')
+
+
+
+setwd("~/Library/CloudStorage/Dropbox/Barnea lab/Central complex/Current Biology/Figures/Figure S3")
+
+ggsave(filename = "PFN translational velocity boxplot.svg", plot = pfn.trans.box, width = 4,height = 4)
+ggsave(filename = "PFN N bouts boxplot.svg", plot = pfn.nbouts.box, width = 4,height = 4)
+
+```
+
+```{r}
+
+DunnettTest(PFN.bouts.summary.31$mean_trans_vel,PFN.bouts.summary.31$Driver, control = "Empty")
+DunnettTest(PFN.bouts.summary.31$nBouts,PFN.bouts.summary.31$Driver, control = "Empty")
+
+```
+
+```{r}
+
+#15 secs of walking
+empty.31c.path.data = timecourse.data.from.list(cx.shi.full$`Empty 31C Counterclockwise 09`,1,c("Driver","Temperature","Stimulus","Replicate"))
+
+length.to.plot = 15*32.63
+
+start.frame = 6500
+end.frame = start.frame+length.to.plot-1
+
+empty.31c.path.data = empty.31c.path.data[c(start.frame:end.frame),]
+
+ang.max.31 = max(abs(empty.31c.path.data$angular_velocity),na.rm = TRUE)
+empty.31c.path.data$translational_velocity = empty.31c.path.data$translational_velocity/max( empty.31c.path.data$translational_velocity,na.rm = TRUE)
+
+
+
+empty.31.ang.path = ggplot(empty.31c.path.data,aes(x=x,y=y,color=angular_velocity))+
+  geom_path(size=1)+
+  scale_color_scico(palette = "romaO",limits = c(-ang.max.31,ang.max.31))+
+  coord_fixed(ratio = 1)+
+  #ylim(c(0,ymax))+
+  #xlim(c(0,xmax))+
+  theme_minimal()+
+  theme(panel.grid = element_blank(),
+        axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.line.x = element_line(size=1,linetype = "solid"),
+        axis.ticks = element_line(size=1,linetype = "solid"))
+
+empty.31.trans.path = ggplot(empty.31c.path.data,aes(x=x,y=y,color=translational_velocity))+
+  geom_path(size=1)+
+  scale_color_scico(palette = "romaO",begin=0.5,end=1)+
+  coord_fixed(ratio = 1)+ 
+  #ylim(0,ymax)+
+  #xlim(0,xmax)+
+  theme_minimal()+
+  theme(panel.grid = element_blank(),
+        axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.line.x = element_line(size=1,linetype = "solid"),
+        axis.ticks = element_line(size=1,linetype = "solid"))
+
+
+
+```
+
+```{r}
+
+
+#31c
+empty.31c.lineplot.data = rbind(empty.31c.path.data,empty.31c.path.data)
+empty.31c.lineplot.data$angular_velocity = empty.31c.lineplot.data$angular_velocity/ang.max.31
+empty.31c.lineplot.data$Velocity = c(empty.31c.path.data$translational_velocity,
+                                    empty.31c.path.data$angular_velocity/ang.max.31)
+empty.31c.lineplot.data$Velocity_type = c(rep("Translational",nrow(empty.31c.path.data)),
+                                         rep("Angular",nrow(empty.31c.path.data)))
+empty.31c.lineplot.data$Time = c(c(1:nrow(empty.31c.path.data))/32.63,
+                                c(1:nrow(empty.31c.path.data))/32.63)
+
+```
+
+```{r}
+
+empty.31.vel.lineplot = ggplot(empty.31c.lineplot.data,aes(x=Time,y=Velocity,color=Velocity_type))+
+  geom_hline(yintercept = 0,linetype = "dashed",alpha =1,col= "black",size=1)+
+  geom_line(size=1)+
+  theme_minimal()+
+  #ylim(c(-1,1))+
+  scale_color_manual(values=c("#f194a3","#45ada8"))+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+```
+
+```{r}
+
+#30 secs of walking
+empty.21c.path.data = timecourse.data.from.list(cx.shi.full$`Empty 21C Counterclockwise 09`,1,c("Driver","Temperature","Stimulus","Replicate"))
+
+length.to.plot = 15*32.63
+
+start.frame = 4500
+end.frame = start.frame+length.to.plot-1
+
+empty.21c.path.data = empty.21c.path.data[c(start.frame:end.frame),]
+
+ang.max.21 = max(abs(empty.21c.path.data$angular_velocity),na.rm = TRUE)
+empty.21c.path.data$translational_velocity = empty.21c.path.data$translational_velocity/max( empty.21c.path.data$translational_velocity,na.rm = TRUE)
+
+
+
+empty.21.ang.path = ggplot(empty.21c.path.data,aes(x=x,y=y,color=angular_velocity))+
+  geom_path(size=1)+
+  scale_color_scico(palette = "romaO",limits = c(-ang.max.21,ang.max.21))+
+  coord_fixed(ratio = 1)+
+  #ylim(c(0,ymax))+
+  #xlim(c(0,xmax))+
+  theme_minimal()+
+  theme(panel.grid = element_blank(),
+        axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.line.x = element_line(size=1,linetype = "solid"),
+        axis.ticks = element_line(size=1,linetype = "solid"))
+
+empty.21.trans.path = ggplot(empty.21c.path.data,aes(x=x,y=y,color=translational_velocity))+
+  geom_path(size=1)+
+  scale_color_scico(palette = "romaO",begin=0.5,end=1)+
+  coord_fixed(ratio = 1)+ 
+  #ylim(0,ymax)+
+  #xlim(0,xmax)+
+  theme_minimal()+
+  theme(panel.grid = element_blank(),
+        axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.line.x = element_line(size=1,linetype = "solid"),
+        axis.ticks = element_line(size=1,linetype = "solid"))
+
+empty.21.ang.path
+
+empty.21.trans.path
+
+```
+
+```{r}
+
+
+#31c
+empty.21c.lineplot.data = rbind(empty.21c.path.data,empty.21c.path.data)
+empty.21c.lineplot.data$angular_velocity = empty.21c.lineplot.data$angular_velocity/ang.max.21
+empty.21c.lineplot.data$Velocity = c(empty.21c.path.data$translational_velocity,
+                                    empty.21c.path.data$angular_velocity/ang.max.21)
+empty.21c.lineplot.data$Velocity_type = c(rep("Translational",nrow(empty.21c.path.data)),
+                                         rep("Angular",nrow(empty.21c.path.data)))
+empty.21c.lineplot.data$Time = c(c(1:nrow(empty.21c.path.data))/32.63,
+                                c(1:nrow(empty.21c.path.data))/32.63)
+
+```
+
+```{r}
+
+empty.21.vel.lineplot = ggplot(empty.21c.lineplot.data,aes(x=Time,y=Velocity,color=Velocity_type))+
+  geom_hline(yintercept = 0,linetype = "dashed",alpha =1,col= "black",size=1)+
+  geom_line(size=1)+
+  theme_minimal()+
+  #ylim(c(-1,1))+
+  scale_color_manual(values=c("#f194a3","#45ada8"))+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+empty.21.vel.lineplot
+
+```
+
+```{r}
+
+setwd("~/Library/CloudStorage/Dropbox/Barnea lab/Central complex/Current Biology/Figures/Figure S3")
+
+ggsave(empty.31.ang.path, file="empty 31C ang vel path plot.svg",width=4,height=4)
+ggsave(empty.31.trans.path, file="empty 31C trans vel path plot.svg",width=4,height=4)
+ggsave(empty.31.vel.lineplot, file="empty 31C vel lineplot.svg",width=6,height=4)
+
+ggsave(empty.21.ang.path, file="empty 21C ang vel path plot.svg",width=4,height=4)
+ggsave(empty.21.trans.path, file="empty 21C trans vel path plot.svg",width=4,height=4)
+ggsave(empty.21.vel.lineplot, file="empty 21C vel lineplot.svg",width=6,height=4)
+
+```
+

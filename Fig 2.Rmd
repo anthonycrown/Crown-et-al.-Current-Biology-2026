@@ -1,0 +1,213 @@
+---
+title: "Fig 2 and S2"
+output: html_notebook
+---
+
+```{r}
+
+library(ggplot2)
+library(Rmisc)
+library(readxl)
+library(readr)
+source("path/to/Kinematics methods.R")
+
+```
+
+```{r}
+
+shibire_data_path = "path/to/data"
+shibire_experiment_dimensions = "path/to/experiment/dimensions"
+output_dir = "output/directory"
+
+```
+
+```{r}
+
+cx.shi.full = tracker_csv_to_list(shibire_data_path)
+cx.shi.full = convert_list_to_mm(cx.shi.full)
+cx.shi.full = calculate_velocity_values(cx.shi.full)
+cx.shi.full = calculate_distance_to_center(cx.shi.full)
+cx.shi.full = smooth_velocity_values_list(cx.shi.full,10)
+cx.shi.full = extract_walk_bouts_list(cx.shi.full,10)
+
+```
+
+```{r}
+
+EB.shi.exps = cx.shi.full[grep("Empty|EPG|PEN",names(cx.shi.full))]
+
+```
+
+
+```{r}
+
+wt.31.path.representative = path_plot(cx.shi.full$`Empty 31C Counterclockwise 04`,0,5*32.63*60)
+#epg.31.path.plot.representative = path_plot(cx.shi.full$`EPG 31C Counterclockwise 01`,0,5*32.63*60)
+epg.31.path.plot.representative = path_plot(cx.shi.full$`EPG 31C Counterclockwise 09`,0,5*32.63*60)
+pen.31.path.plot.representative = path_plot(cx.shi.full$`PEN 31C Counterclockwise 08`,0,5*32.63*60)
+
+wt.21.path.representative = path_plot(cx.shi.full$`Empty 21C Counterclockwise 09`,0,5*32.63*60)
+epg.21.path.representative = path_plot(cx.shi.full$`EPG 21C Counterclockwise 09`,0,5*32.63*60)
+pen.21.path.plot.representative = path_plot(cx.shi.full$`PEN 21C Counterclockwise 04`,0,5*32.63*60)
+
+setwd(output_dir)
+
+ggsave(plot = wt.31.path.representative,file = "Empty 31 path plot.svg",width = 4,height = 4)
+ggsave(plot = epg.31.path.plot.representative, file = "EPG 31 path plot.svg",width = 4, height = 4)
+ggsave(plot = pen.31.path.plot.representative, file = "PEN 31 path plot.svg",width = 4, height = 4)
+
+
+ggsave(plot = wt.21.path.representative,file = "Empty 21 path plot.svg",width = 4,height = 4)
+ggsave(plot = epg.21.path.representative, file = "EPG 21 path plot.svg",width = 4, height = 4)
+ggsave(plot = pen.21.path.plot.representative, file = "PEN 21 path plot.svg",width = 4, height = 4)
+
+```
+
+```{r}
+
+EB.shi.bouts = per_bouts_matrix(EB.shi.exps,c("Driver","Temperature","Stimulus","Replicate"),1,10*60*32.63,30)
+EB.bout.summaries = bouts_matrix(EB.shi.exps,c("Driver","Temperature","Stimulus","Replicate"),1,10*60*32.63,30)
+
+```
+
+```{r}
+
+EB.timecourse = timecourse_matrix_per_bout(EB.shi.exps,c("Driver","Temperature","Stimulus","Replicate"),1,10*60*32.63,30)
+EB.timecourse.all.distances = timecourse_matrix_per_bout(EB.shi.exps,c("Driver","Temperature","Stimulus","Replicate"),1,10*60*32.63,1000)
+
+EB.timecourse$ang_vel[which(EB.timecourse$Stimulus == "Clockwise")] = -EB.timecourse$ang_vel[which(EB.timecourse$Stimulus == "Clockwise")]
+EB.timecourse.all.distances$ang_vel[which(EB.timecourse.all.distances$Stimulus == "Clockwise")] = -EB.timecourse.all.distances$ang_vel[which(EB.timecourse.all.distances$Stimulus == "Clockwise")]
+
+```
+
+```{r}
+
+EB.distance.to.center.summary = summarySE(data = EB.timecourse.all.distances,
+                                          measurevar = "dist_to_center",
+                                          groupvars = c("Driver","Temperature","Stimulus","Replicate"),
+                                          na.rm = TRUE)
+
+EB.distance.to.center.summary.31 = subset(EB.distance.to.center.summary, subset=Temperature="31C")
+EB.distance.to.center.summary.21 = subset(EB.distance.to.center.summary, subset=Temperature="21C")
+
+```
+
+```{r}
+
+distance_to_center_boxplot = ggplot(EB.distance.to.center.summary, aes(x = Driver,fill = Temperature, y = dist_to_center))+
+  geom_boxplot()+
+  geom_point(aes(fill = Temperature), size = 1, shape = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#8491B450","#d1495b"))+
+  theme_minimal()+
+  ylim(c(0,65))+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+distance_to_center_hist = ggplot(subset(EB.distance.to.center.summary,subset = Driver =="EPG"), aes(x = dist_to_center,fill = Temperature))+
+  geom_hist(aes(y = after_stat(density)),alpha=0.3)+
+  scale_fill_manual(values = c("#8491B450","#d1495b"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+setwd(output_dir)
+
+ggsave(filename = "EB distance to center boxplot.svg", plot = distance_to_center_boxplot, width = 4,height = 4)
+ggsave(filename = "EB distance to center histogram.svg", plot = distance_to_center_hist, width = 4,height = 4)
+
+
+```
+
+```{r}
+
+DunnettTest(EB.distance.to.center.summary.31$dist_to_center,EB.distance.to.center.summary.31$Driver)
+
+```
+
+```{r}
+
+EB.timecourse.summary = summarySE(data = EB.timecourse,
+                                   measurevar = "ang_vel",
+                                   groupvars = c("Driver","Temperature","time"),
+                                   na.rm = TRUE)
+
+EB.timecourse.summary.31 = subset(EB.timecourse.summary, subset = Temperature =="31C")
+EB.timecourse.summary.21 = subset(EB.timecourse.summary, subset = Temperature =="21C")
+
+```
+
+```{r}
+
+
+EB.var.over.time.31 = ggplot(EB.timecourse.summary.31, aes(x = time,y=sd*sd,color = Driver))+
+  geom_line()+
+  theme_minimal()+
+  scale_x_continuous(trans='log2')+
+  ylim(c(0,50))
+  
+
+EB.var.over.time.21 = ggplot(EB.timecourse.summary.21, aes(x = time,y=sd*sd,color = Driver))+
+  geom_line()+
+  theme_minimal()+
+  scale_x_continuous(trans='log2')+
+  ylim(c(0,50))
+  
+
+EB.var.over.time.31
+EB.var.over.time.21
+
+setwd(output_dir)
+
+ggsave(EB.var.over.time.31, file="EB silencing 31C variance over time.svg",height=4,width = 4)
+ggsave(EB.var.over.time.21, file="EB silencing 21C variance over time.svg",height=4,width = 4)
+
+```
+
+
+```{r}
+
+EB.ang.box = ggplot(EB.bout.summaries.corrected, aes(x = Driver,fill = Temperature, y = mean_ang_vel))+
+  geom_boxplot()+
+  geom_point(aes(fill = Temperature), size = 1, shape = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#8491B450","#d1495b"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+EB.ang.var.box = ggplot(EB.bout.summaries.corrected, aes(x = Driver,fill = Temperature, y = ang_var))+
+  geom_boxplot()+
+  geom_point(aes(fill = Temperature), size = 1, shape = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#8491B450","#d1495b"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+EB.trans.box = ggplot(EB.bout.summaries.corrected, aes(x = Driver,fill = Temperature, y = mean_trans_vel))+
+  geom_boxplot()+
+  geom_point(aes(fill = Temperature), size = 1, shape = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#8491B450","#d1495b"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+
+setwd(output_dir)
+
+ggsave(filename = "EB angular variance boxplot.svg", plot = EB.ang.var.box, width = 4,height = 4)
+ggsave(filename = "EB angular velocity boxplot.svg", plot = EB.ang.box, width = 4,height = 4)
+ggsave(filename = "EB translational velocity boxplot.svg", plot = EB.trans.box, width = 4,height = 4)
+
+```
+
+```{r}
+
+DunnettTest(EB.bout.summaries.31$ang_var,EB.bout.summaries.31$Driver)
+DunnettTest(EB.bout.summaries.31$mean_ang_vel,EB.bout.summaries.31$Driver)
+DunnettTest(EB.bout.summaries.31$mean_trans_vel,EB.bout.summaries.31$Driver)
+
+```

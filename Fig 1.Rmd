@@ -1,0 +1,288 @@
+---
+title: "Figures 1 and S1"
+output: html_notebook
+---
+
+```{r}
+
+library(ggplot2)
+library(Rmisc)
+library(readxl)
+library(readr)
+source("path/to/Kinematics methods.R")
+
+```
+
+```{r}
+
+canton-s_data_path = "path/to/data"
+canton-s_experiment_dimensions = "path/to/experiment/dimensions"
+output_dir = "output/directory"
+
+```
+
+```{r}
+
+canton.s.exps = tracker_csv_to_list(canton-s_data_path)
+canton.s.exps = convert_list_to_mm(canton.s.exps,canton-s_experiment_dimensions)
+canton.s.exps = calculate_velocity_values(canton.s.exps)
+canton.s.exps = calculate_distance_to_center(canton.s.exps)
+canton.s.exps = smooth_velocity_values_list(canton.s.exps,10)
+canton.s.exps = extract_walk_bouts_list(canton.s.exps,10)
+
+```
+
+
+```{r}
+
+canton.s.vr.visible = canton.s.exps[grep("visible",names(canton.s.exps))]
+
+canton.s.clockwise.exp = canton.s.exps$`Counterclockwise visible 05`
+
+```
+
+```{r}
+
+setwd(output_dir)
+
+WT.paths = bouts_plot(canton.s.clockwise.exp,1,30,5*32.63*60)
+
+WT.path.raw = path_plot(canton.s.clockwise.exp,1,5*32.63*60)
+
+#WT.paths[[1]]
+
+ggsave(plot = WT.paths[[1]], filename = "WT path plot.svg", width = 4,height = 4)
+
+ggsave(plot = WT.paths[[4]], filename = "WT ang vel over time.svg", width = 6, height = 4)
+
+ggsave(plot = WT.path.raw, filename = "WT path untransformed.svg", width = 4,height = 4)
+
+
+
+```
+
+```{r}
+
+canton.s.bouts = per_bouts_matrix(canton.s.vr.visible,c("Stimulus","Visibility","replicate"),1,5*60*32.63,100)
+
+canton.s.bouts.corrected = canton.s.bouts
+canton.s.bouts.corrected$mean_ang_vel[which(canton.s.bouts.corrected$Stimulus == "Clockwise")] =  canton.s.bouts.corrected$mean_ang_vel[which(canton.s.bouts.corrected$Stimulus == "Clockwise")] *-1
+
+canton.s.bouts.corrected$Stimulus[which(canton.s.bouts.corrected$Stimulus == "Clockwise")] = "Moving"
+canton.s.bouts.corrected$Stimulus[which(canton.s.bouts.corrected$Stimulus == "Counterclockwise")] = "Moving"
+
+
+```
+
+
+```{r}
+
+bouts.v.duration = canton.s.bouts.corrected %>%
+  slice_sample(prop = 1)%>%
+  ggplot(aes(x = bout_duration ,
+             y = mean_ang_vel,
+             color = Stimulus))+
+        geom_point()+
+        geom_hline(size = 1,yintercept = 2*pi/3,linetype="dashed",color = "black")+
+        theme_minimal()+
+        scale_color_manual(values = c("#d1495b","#8491B4"))+
+  theme(legend.position = "none")
+
+bouts.v.duration
+
+setwd(output_dir)
+
+ggsave(plot = bouts.v.duration, file = "ang_vel vs bout duration.svg",width = 4,height = 4)
+
+
+```
+
+```{r}
+
+canton.s.timecourse = timecourse_matrix_per_bout(canton.s.vr.visible,c("Stimulus","Visibility","Replicate"),1,5*60*32.63,100)
+
+```
+
+```{r}
+
+canton.s.timecourse$ang_vel[which(canton.s.timecourse$Stimulus == "Clockwise")] = -canton.s.timecourse$ang_vel[which(canton.s.timecourse$Stimulus == "Clockwise")]
+
+canton.s.timecourse$Stimulus[which(canton.s.timecourse$Stimulus != "Still")] ="Moving"
+
+
+
+```
+
+```{r}
+
+canton.s.timecourse.ang.summary = summarySE(data = canton.s.timecourse,
+                                          measurevar = "ang_vel",
+                                          groupvar=c("Stimulus","Visibility"))
+
+```
+
+```{r}
+
+canton.s.timecourse.ang.summary = summarySE(data = canton.s.timecourse,
+                                            measurevar = "ang_vel",
+                                            groupvars = c("time","Direction"),
+                                            na.rm = TRUE)
+
+canton.s.timecourse.ang.summary = canton.s.timecourse.ang.summary[which(canton.s.timecourse.ang.summary$N > 10),]
+
+
+```
+
+```{r}
+
+ggplot(canton.s.timecourse.ang.summary, aes(x = time,y=ang_vel,color = Direction))+
+  geom_hline(size = 1,yintercept = 2*pi/3,linetype="dashed",color = "black")+
+  geom_hline(size = 1,yintercept = 0,linetype="solid",color = "black")+
+  geom_line()+
+  theme_minimal()+
+  scale_x_continuous(trans='log2')#+ 
+  #geom_smooth()+
+  #xlim(c(0,30))+
+  #ylim(c(-5,10))
+
+var.over.time = ggplot(canton.s.timecourse.ang.summary, aes(x = time,y=sd,color = Direction))+
+  geom_line()+
+  theme_minimal()+
+  scale_x_continuous(trans='log10')+
+        scale_color_manual(values = c("#d1495b","#8491B4"))+
+  theme(legend.position = "none")
+  #geom_smooth()
+#  xlim(c(0,30))+
+#  ylim(c(0,30))
+
+
+
+setwd(output_dir)
+
+ggsave(plot = var.over.time, file = "variance over time.svg",width = 4,height = 4)
+
+
+```
+
+
+Figure S1 (comparison to w1118 flies)
+
+```{r}
+
+w1118_data_path = "path/to/w1118/data"
+
+```
+
+```{r}
+
+w1118.closed.loop = tracker_csv_to_list(w1118_data_path)
+w1118.closed.loop = calculate_velocity_values(w1118.closed.loop)
+w1118.closed.loop = smooth_velocity_values_list(w1118.closed.loop,10)
+w1118.closed.loop = extract_walk_bouts_list(w1118.closed.loop,10)
+
+
+```
+
+```{r}
+
+w1118.timecourse = timecourse_matrix_per_bout(w1118.closed.loop,c("Stimulus","Replicate"),1,5*60*32.63,100)
+w1118.timecourse = w1118.timecourse[-which(is.na(w1118.timecourse$bout)),]
+
+w1118.timecourse$ang_vel[which(w1118.timecourse$Stimulus == "Clockwise")] = -w1118.timecourse$ang_vel[which(w1118.timecourse$Stimulus == "Clockwise")]
+
+```
+
+
+```{r}
+
+w1118.timecourse.ang.summary = summarySE(data = w1118.timecourse,
+                                            measurevar = "ang_vel",
+                                            groupvars = c("time"),
+                                            na.rm = TRUE)
+
+w1118.timecourse.ang.summary = w1118.timecourse.ang.summary[which(w1118.timecourse.ang.summary$N > 10),]
+
+```
+
+
+```{r canton-s vs w1118}
+
+canton.s.timecourse.to.append = canton.s.timecourse[,-which(colnames(canton.s.timecourse)=="Visibility")]
+canton.s.timecourse.to.append$Background = "Canton-S"
+
+w1118.timecourse$Background = "W1118"
+
+backgroud.comparison.timecourse = rbind(canton.s.timecourse.to.append,w1118.timecourse)
+backgroud.comparison.timecourse.summary = summarySE(data = backgroud.comparison.timecourse,
+                                                    measurevar = "ang_vel",
+                                                    groupvars = c("time", "Background"),
+                                                    na.rm = TRUE)
+
+backgroud.comparison.timecourse.summary = backgroud.comparison.timecourse.summary[which(backgroud.comparison.timecourse.summary$N>10),]
+
+```
+
+```{r}
+
+var.over.time = ggplot(backgroud.comparison.timecourse.summary, aes(x = time,y=sd,color = Background))+
+  geom_line()+
+  theme_minimal()+
+  scale_x_continuous(trans='log10')+
+        scale_color_manual(values = c("#d1495b","#8491B4"))+
+  theme(legend.position = "none")
+
+var.over.time
+
+setwd("~/Library/CloudStorage/Dropbox/Barnea lab/Central complex/Current Biology/Figures/Figure S1")
+
+ggsave(var.over.time, file = "Canton-s and W1118 variance trajectory.svg",width = 6,height = 4)
+
+```
+
+
+```{r}
+
+w1118.bouts = per_bouts_matrix(wt.vr.closed.loop,c("Stimulus","replicate"),1,5*60*32.63,100)
+
+w1118.bouts.corrected = w1118.bouts
+w1118.bouts.corrected$mean_ang_vel[which(w1118.bouts.corrected$Stimulus == "Clockwise")] =  w1118.bouts.corrected$mean_ang_vel[which(w1118.bouts.corrected$Stimulus == "Clockwise")] *-1
+
+w1118.bouts.corrected$Background = "W1118"
+
+```
+
+
+```{r}
+
+canton.s.bouts.to.append = canton.s.bouts.corrected
+canton.s.bouts.to.append = canton.s.bouts.to.append[,-which(colnames(canton.s.bouts.to.append)=="Visibility")]
+
+canton.s.bouts.to.append = canton.s.bouts.to.append[-which(canton.s.bouts.to.append$Stimulus == "Still"),]
+
+canton.s.bouts.to.append$Background = "Canton-S"
+
+backgroud.comparison.bouts = rbind(canton.s.bouts.to.append,w1118.bouts.corrected)
+
+
+```
+
+```{r}
+
+bouts.v.duration =  backgroud.comparison.bouts %>%
+  slice_sample(prop = 1)%>%
+  ggplot(aes(x = bout_duration ,
+             y = mean_ang_vel,
+             color = Background))+
+        geom_point()+
+        geom_hline(size = 1,yintercept = 2*pi/3,linetype="dashed",color = "black")+
+        theme_minimal()+
+        scale_color_manual(values = c("#d1495b","#8491B4"))+
+  theme(legend.position = "none")
+
+bouts.v.duration
+
+setwd(output_dir)
+
+ggsave(bouts.v.duration, file = "Canton-s and W1118 bouts vs walking duration scatter.svg",width = 6,height = 4)
+
+```

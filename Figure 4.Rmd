@@ -1,0 +1,909 @@
+---
+title: "Fig. 4, S4 and S5"
+output: html_notebook
+---
+
+```{r}
+
+library(ggplot2)
+library(Rmisc)
+library(readxl)
+library(readr)
+source("path/to/Kinematics methods.R")
+
+```
+
+```{r}
+
+sparc_S_data_path = "path/to/data"
+sparc_S_opto_frames = "path/to/opto/frames"
+sparc_S_exp_dimensions = "path/to/experiment/dimensions"
+output_dir = "output/directory"
+
+sparc_anatomy_dir = "path/to/sparc/anatomy"
+
+```
+
+```{r}
+
+SPARC.S.tracked.smoothed = opto_csv_to_list(sparc_S_data_path,sparc_S_opto_frames)
+SPARC.S.tracked.smoothed = calculate_velocity_values(SPARC.S.tracked.smoothed)
+SPARC.S.tracked.smoothed = smooth_velocity_values_list(SPARC.S.tracked.smoothed,10)
+
+```
+
+```{r}
+
+pfn.sparc.anatomy = read_excel(sparc_anatomy_dir)
+
+```
+
+```{r stats df}
+
+pfn.sparc.stats = stats_matrix_from_list_opto_single(SPARC.S.tracked.smoothed,c("Replicate"))
+pfn.sparc.bout.stats = sep_opto_exp_list_to_bouts(SPARC.S.tracked.smoothed,c("Replicate"))
+
+```
+
+
+```{r scrambling opto bouts data}
+
+set.seed(1234)
+
+pfn.bouts.stats.scrambled = pfn.sparc.bout.stats
+
+trials = names(table(pfn.bouts.stats.scrambled$Replicate)) 
+
+for(i in c(1:length(trials))){
+  
+  subset.inds = which(pfn.bouts.stats.scrambled$Replicate == trials[i])
+  
+  curr.trial = pfn.bouts.stats.scrambled[subset.inds,]
+  
+  curr.trial$Angular = sample(curr.trial$Angular, replace = FALSE)
+  curr.trial$Translational = sample(curr.trial$Translational, replace = FALSE)
+  curr.trial$Absolute_angular = sample(curr.trial$Absolute_angular, replace = FALSE)
+  
+  pfn.bouts.stats.scrambled[subset.inds,] = curr.trial
+  
+}
+
+scrambled.summary.ang = summarySE(data = pfn.bouts.stats.scrambled,
+                                  measurevar = "Angular",
+                                  groupvars = c("Time"),
+                                  na.rm = TRUE)
+
+scrambled.summary.trans = summarySE(data = pfn.bouts.stats.scrambled,
+                                  measurevar = "Translational",
+                                  groupvars = c("Time"),
+                                  na.rm = TRUE)
+
+scrambled.summary.abs.ang = summarySE(data = pfn.bouts.stats.scrambled,
+                                  measurevar = "Absolute_angular",
+                                  groupvars = c("Time"),
+                                  na.rm = TRUE)
+
+```
+
+```{r}
+
+pfn.sparc.bout.stats$Exp = "Experimental"
+pfn.bouts.stats.scrambled$Exp = "Scrambled"
+
+exp.vs.scrambled = rbind(pfn.sparc.bout.stats,pfn.bouts.stats.scrambled)
+
+exp.vs.scrambled.trans = summarySE(data = exp.vs.scrambled, measurevar = "Translational", groupvars = c("Time","Exp"))
+exp.vs.scrambled.ang = summarySE(data = exp.vs.scrambled, measurevar = "Angular", groupvars = c("Time","Exp"))
+exp.vs.scrambled.abs.ang = summarySE(data = exp.vs.scrambled, measurevar = "Absolute_angular", groupvars = c("Time","Exp"))
+
+
+```
+
+```{r}
+data.rect = data.frame(x1 = 20,x2 = 40)
+
+scramble.vs.exp.trans = ggplot(exp.vs.scrambled.trans, aes(x = Time, y = Translational,color = Exp))+
+    geom_rect(data = data.rect, inherit.aes = FALSE, aes(xmin = x1,xmax = x2, ymin = 0.1, ymax = 0.5),
+            color="transparent",
+            alpha = 0.3,
+            fill = "#f194a3")+
+  geom_ribbon(aes(ymin = Translational-se,ymax=Translational+se, fill = Exp),color = NA,alpha = 0.1)+
+  geom_line()+
+  theme_minimal()+
+  scale_color_manual(values = c("#45ada8","darkgrey"))+
+  scale_fill_manual(values = c("#45ada8","darkgrey"))
+
+scramble.vs.exp.ang = ggplot(exp.vs.scrambled.abs.ang, aes(x = Time, y = Absolute_angular,color = Exp))+
+  geom_rect(data = data.rect, inherit.aes = FALSE, aes(xmin = x1,xmax = x2, ymin = 0, ymax = 4.2),
+            color="transparent",
+            alpha = 0.3,
+            fill = "#f194a3")+
+  geom_ribbon(aes(ymin = Absolute_angular-se, ymax = Absolute_angular+se, fill=Exp),color=NA,alpha=0.1)+
+  geom_line()+
+  theme_minimal()+
+  scale_color_manual(values = c("#45ada8","darkgrey"))+
+  scale_fill_manual(values = c("#45ada8","darkgrey"))
+
+setwd("~/Library/CloudStorage/Dropbox/Barnea lab/Central complex/Current Biology/Figures/Figure 4")
+
+ggsave(plot = scramble.vs.exp.trans, filename = "SPARC trans vel over time vs scramble.svg",height = 4, width = 6)
+
+ggsave(plot = scramble.vs.exp.ang, filename = "SPARC abs ang vel over time vs scramble.svg",height = 4, width = 6)
+
+```
+
+```{r}
+
+sparc.bout.ang.stats = summarySE(data = pfn.sparc.bout.stats,measurevar = "Angular", groupvars = c("Phase","Bout","Replicate","SPARC"),na.rm = TRUE)
+sparc.bout.ang.stats.on = sparc.bout.ang.stats[which(sparc.bout.ang.stats$Phase == "Light on"),]
+
+sparc.bout.abs.ang.stats = summarySE(data = pfn.sparc.bout.stats,measurevar = "Absolute_angular", groupvars = c("Phase","Bout","Replicate","SPARC"),na.rm = TRUE)
+sparc.bout.abs.ang.stats.on = sparc.bout.abs.ang.stats[which(sparc.bout.abs.ang.stats$Phase == "Light on"),]
+
+```
+
+
+```{r append pfn anatomy}
+
+pfn.sparc.stats$NO2_R = NA
+pfn.sparc.stats$NO2_L = NA
+pfn.sparc.stats$NO3_R = NA
+pfn.sparc.stats$NO3_L = NA
+pfn.sparc.stats$deltaNOaminusd = NA
+
+for(i in c(1:nrow(pfn.sparc.stats))){
+  
+  curr.rep = as.numeric(strsplit(pfn.sparc.stats$Replicate[i],"Fly")[[1]][2])
+  curr.rep = paste("Fly",curr.rep,sep=" ")
+  curr.anat.info = pfn.sparc.anatomy[which(pfn.sparc.anatomy[,1]==curr.rep),]
+  
+  #pfn.sparc.stats
+  if(nrow(curr.anat.info)==1)
+  {
+    pfn.sparc.stats$NO2_R[i] = curr.anat.info$`R NO 2 signal`
+    pfn.sparc.stats$NO2_L[i] = curr.anat.info$`L NO 2 signal`
+    pfn.sparc.stats$NO3_R[i] = curr.anat.info$`R NO 3 signal`
+    pfn.sparc.stats$NO3_L[i] = curr.anat.info$`L NO 3 signal`
+    
+    pfn.sparc.stats$deltaNOaminusd[i] = curr.anat.info$`NO2R vs NO3L ratio`
+  }
+
+}
+
+
+pfn.sparc.stats$NO2_R[which(pfn.sparc.stats$NO2_R <0)] = 0
+pfn.sparc.stats$NO2_L[which(pfn.sparc.stats$NO2_L <0)] = 0
+pfn.sparc.stats$NO3_R[which(pfn.sparc.stats$NO3_R <0)] = 0
+pfn.sparc.stats$NO3_L[which(pfn.sparc.stats$NO3_L <0)] = 0
+
+```
+
+
+```{r delta NO inds}
+
+pfn.sparc.stats$deltaNOd = (pfn.sparc.stats$NO2_R-pfn.sparc.stats$NO2_L)/(pfn.sparc.stats$NO2_R+pfn.sparc.stats$NO2_L)
+pfn.sparc.stats$deltaNOa = (pfn.sparc.stats$NO3_R-pfn.sparc.stats$NO3_L)/(pfn.sparc.stats$NO3_R+pfn.sparc.stats$NO3_L)
+pfn.sparc.stats$deltaNOaminusd = (-pfn.sparc.stats$NO2_R+pfn.sparc.stats$NO2_L+pfn.sparc.stats$NO3_R-pfn.sparc.stats$NO3_L)/(pfn.sparc.stats$NO2_R+pfn.sparc.stats$NO2_L+pfn.sparc.stats$NO3_R+pfn.sparc.stats$NO3_L)
+
+```
+
+```{r stats}
+
+deltaNOad_cor = cor(pfn.sparc.stats$delta_angular_velocity,pfn.sparc.stats$deltaNOaminusd,method = "pearson",use="complete.obs")
+deltaNOd_cor = cor(pfn.sparc.stats$delta_angular_velocity,pfn.sparc.stats$deltaNOd,method = "pearson",use="complete.obs")
+deltaNOa_cor = cor(pfn.sparc.stats$delta_angular_velocity,pfn.sparc.stats$deltaNOa,method = "pearson",use="complete.obs")
+
+delta_NOaminusd_lm = lm(delta_angular_velocity ~ deltaNOaminusd, data = pfn.sparc.stats)
+#summary(delta_NOaminusd_lm)
+
+delta_NOd_lm = lm(delta_angular_velocity ~ deltaNOd, data = pfn.sparc.stats)
+#summary(delta_NOd_lm)
+
+delta_NOa_lm = lm(delta_angular_velocity ~ deltaNOa, data = pfn.sparc.stats)
+#summary(delta_NOa_lm)
+```
+
+```{r confidence intervals}
+
+attach(pfn.sparc.stats)
+
+# Define new data point(s)
+minus_one_to_one <- data.frame(deltaNOaminusd = c(-1, 1),
+                               deltaNOd = c(-1,1),
+                               deltaNOa = c(-1,1))
+
+# Calculate confidence intervals for the mean response
+deltaNOaminusd_CI_prediction = predict(delta_NOaminusd_lm, newdata = minus_one_to_one, interval = "confidence",level=0.95)
+deltaNOa_CI_prediction = predict(delta_NOa_lm, newdata = minus_one_to_one, interval = "confidence")
+deltaNOd_CI_prediction = predict(delta_NOd_lm, newdata = minus_one_to_one, interval = "confidence")
+
+
+#deltaNOaminusd_CI_prediction$x = c(-1,1)
+
+deltaNOaminusd_CI_prediction = data.frame(x=c(-1,1),lwr=deltaNOaminusd_CI_prediction[,2],upr=deltaNOaminusd_CI_prediction[,3],fit=deltaNOaminusd_CI_prediction[,1],ymax=c(-1,1),group=c("lower","upper"))
+
+deltaNOd_CI_prediction = data.frame(x=c(-1,1),lwr=deltaNOd_CI_prediction[,2],upr=deltaNOd_CI_prediction[,3],fit=deltaNOd_CI_prediction[,1],ymax=c(-1,1),group=c("lower","upper"))
+
+deltaNOa_CI_prediction = data.frame(x=c(-1,1),lwr=deltaNOa_CI_prediction[,2],upr=deltaNOa_CI_prediction[,3],fit=deltaNOa_CI_prediction[,1],ymax=c(-1,1),group=c("lower","upper"))
+
+```
+
+```{r dotplots}
+
+dNOa_scatter = ggplot(pfn.sparc.stats, aes(x = deltaNOa, y = delta_angular_velocity))+
+  geom_point()+
+  geom_smooth(method = 'lm', color = 'black', se = FALSE,fullrange = TRUE)+
+  theme_minimal()+
+  xlim(c(-1,1))+
+  geom_segment(data = deltaNOa_CI_prediction, inherit.aes=FALSE, aes(x=x,xend=x,y=lwr,yend = upr),size=1)+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15),
+        axis.line.x = element_line(size=1,linetype = "solid"))
+
+dNOd_scatter = ggplot(pfn.sparc.stats, aes(x = deltaNOd, y = delta_angular_velocity))+
+  geom_point()+
+  geom_smooth(method = 'lm', color = 'black', se = FALSE,fullrange = TRUE)+
+  theme_minimal()+
+  xlim(c(-1,1))+
+  geom_segment(data = deltaNOd_CI_prediction, inherit.aes=FALSE, aes(x=x,xend=x,y=lwr,yend = upr),size=1)+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15),
+        axis.line.x = element_line(size=1,linetype = "solid"))
+
+
+dNOad_scatter = ggplot(pfn.sparc.stats, aes(x = deltaNOaminusd, y = delta_angular_velocity))+
+  geom_point()+
+  #geom_text()+
+  geom_smooth(method = 'lm', color = 'black', se = FALSE,fullrange = TRUE)+
+  theme_minimal()+
+  xlim(c(-1,1))+
+  geom_segment(data = deltaNOaminusd_CI_prediction, inherit.aes=FALSE, aes(x=x,xend=x,y=lwr,yend = upr),size=1)+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15),
+        axis.line.x = element_line(size=1,linetype = "solid"))
+
+setwd(output_dir)
+
+ggsave(dNOd_scatter, file = "deltaNOd scatterplot.svg",width=4,height=4)
+ggsave(dNOa_scatter, file = "deltaNOa scatterplot.svg",width=4,height=4)
+ggsave(dNOad_scatter, file = "deltaNOaminusd scatterplot.svg",width=4,height=4)
+  
+```
+
+```{r}
+
+x = convert_list_to_mm(SPARC.S.tracked.smoothed, sparc_S_exp_dimensions)
+
+```
+
+```{r}
+
+delta_NOaminusd_negative_path = opto.single.trial.path.plot.shifted.heading(x$Fly082,1,2)
+
+#opto.single.trial.path.plot.shifted.heading(SPARC.S.tracked.smoothed$Fly043,1,3)
+
+delta_NOaminusd_positive_path = opto.single.trial.path.plot.shifted.heading(x$Fly059,1,1)
+
+delta_NOaminusd_zero_path = opto.single.trial.path.plot.shifted.heading(x$Fly034,1,3)
+
+
+setwd("~/Library/CloudStorage/Dropbox/Barnea lab/Central complex/Current Biology/Figures/Figure 4")
+
+ggsave(delta_NOaminusd_negative_path,file = "deltaNOad negative path plot.svg",width = 4,height=4)
+ggsave(delta_NOaminusd_positive_path,file = "deltaNOad positive path plot.svg",width = 4,height=4)
+ggsave(delta_NOaminusd_zero_path,file = "deltaNOad zero path plot.svg",width = 4,height=4 )
+
+
+```
+
+```{r NO a minus d scramble control}
+
+n_scrambles =  10000
+
+cor_values = c()
+
+for(i in c(1:n_scrambles)){
+  
+  set.seed(i)
+  
+  scramble = sample(c(1:nrow(pfn.sparc.stats)))
+  
+  scrambled_NO2_L = pfn.sparc.stats$NO2_L[scramble]#runif(nrow(pfn.sparc.stats), min = 0, max = 1)
+  scrambled_NO2_R = pfn.sparc.stats$NO2_R[scramble]#runif(nrow(pfn.sparc.stats), min = 0, max = 1)
+  scrambled_NO3_L = pfn.sparc.stats$NO3_L[scramble]#runif(nrow(pfn.sparc.stats), min = 0, max = 1)
+  scrambled_NO3_R = pfn.sparc.stats$NO3_R[scramble]#runif(nrow(pfn.sparc.stats), min = 0, max = 1)
+  
+  scrambled_deltaNOa = (scrambled_NO3_R - scrambled_NO3_L)/(scrambled_NO3_R + scrambled_NO3_L)
+  scrambled_deltaNOd = (scrambled_NO2_R - scrambled_NO2_L)/(scrambled_NO2_R + scrambled_NO2_L)
+  
+  scrambled_deltaNOa_cor_sign = sign(cor(pfn.sparc.stats$delta_angular_velocity, scrambled_deltaNOa,method = "pearson",use="complete.obs"))
+  scrambled_deltaNOd_cor_sign = sign(cor(pfn.sparc.stats$delta_angular_velocity, scrambled_deltaNOd,method = "pearson",use="complete.obs"))
+  
+  scrambled_deltaNOad = (scrambled_deltaNOa_cor_sign*(scrambled_NO3_R - scrambled_NO3_L) + scrambled_deltaNOd_cor_sign*(scrambled_NO2_R - scrambled_NO2_L))/(scrambled_NO3_L+scrambled_NO3_R+scrambled_NO2_L+scrambled_NO2_R)
+  
+  scrambled_deltaNOad_cor =  cor(pfn.sparc.stats$delta_angular_velocity, scrambled_deltaNOad,method = "pearson",use="complete.obs")
+  
+  scrambled_deltaNOad_lm =  lm(pfn.sparc.stats$delta_angular_velocity ~ scrambled_deltaNOad)
+  
+  cor_values = append(cor_values,scrambled_deltaNOad_cor)
+  
+}
+
+deltaNOd_versus_shuffle = data.frame(correlation = cor_values,seed = c(1:n_scrambles))
+
+#hist(cor_values,n=100)
+
+length(which(cor_values > deltaNOad_cor))
+
+```
+
+```{r}
+
+delta_NOad_shuffle_density = ggplot(deltaNOd_versus_shuffle, aes(x=correlation))+
+  geom_density(color = NA, fill = "grey",alpha = 0.3)+
+  geom_vline(xintercept = deltaNOad_cor,linetype = "dashed")+
+  theme_minimal()+
+  theme(axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15),
+        axis.line.x = element_line(size=1,linetype = "solid"))
+
+setwd(output_dir)
+
+ggsave(delta_NOad_shuffle_density, file = "observed vs shuffled deltaNOad correlation hist.svg",width = 4,height = 4)
+
+```
+
+
+```{r scrambled control for comparing correlation changes over time}
+
+set.seed(1234)
+
+x = pfn.sparc.bout.stats
+x$Angular = sample(x$Angular, replace = FALSE)
+
+experiments = names(table(x$Replicate))
+
+activation.frames = as.numeric(names(table(x$Time)))
+activation.frames = activation.frames[which(activation.frames > 20 & activation.frames < 40)]
+activation.frames = as.character(activation.frames)
+
+pre.aves = subset(x, subset = Time <= 20)
+pre.aves = summarySE(data = pre.aves, measurevar = "Angular",groupvars = c("Replicate"))
+
+
+cors = c()
+
+for(i in c(1:length(activation.frames))){
+  
+  curr.frames = activation.frames[c(1:i)]
+  
+  activated.aves = subset(x, subset = Time %in% curr.frames)
+  activated.aves = summarySE(data = activated.aves, measurevar = "Angular", groupvars = c("Replicate"))
+  
+  #data.temp = data.frame(experiment = NA, delta_ang_vel = NA, deltaNOaminusd = NA)
+  
+  delta.NO = c()
+  delta.ang.vel = c()
+  
+  for(j in experiments){
+    
+    pre.aves.sub = subset(pre.aves, Replicate == j)
+    activated.aves.sub = subset(activated.aves, Replicate == j)
+    
+    curr.delta.ang.vel = activated.aves.sub$Angular - pre.aves.sub$Angular
+    curr.delta.NO = experiment.deltano$deltaNOaminusd[which(experiment.deltano$experiment == j)]
+    
+    delta.NO = append(delta.NO, curr.delta.NO)
+    delta.ang.vel = append(delta.ang.vel, curr.delta.ang.vel)
+    
+  }
+  
+  curr.cor = cor(delta.NO,delta.ang.vel, method = "pearson", use = "complete.obs")
+  
+  cors = append(cors, curr.cor)
+  
+}
+
+cor.over.time.data.scrambled = data.frame(stimulus_duration = activation.frames, correlation = -cors)
+
+
+```
+
+```{r}
+
+cor.over.time.data$Exp = "Experimental data"
+cor.over.time.data.scrambled$Exp = "Scrambled"
+
+cor.over.time.plot.data = rbind(cor.over.time.data, cor.over.time.data.scrambled)
+
+```
+
+```{r}
+
+correlation.over.time.plot = ggplot(cor.over.time.plot.data, aes(x = as.numeric(stimulus_duration), y = correlation, color = Exp))+
+  geom_hline(yintercept = 0, color = "black", size = 0.3)+
+  geom_line()+
+  theme_minimal()
+
+
+setwd("~/Barnea lab/Central complex/Neuron/Figure 4/")
+
+ggsave(plot = correlation.over.time.plot, filename = "correlation over time.svg",height = 4, width = 6)
+
+```
+
+```{r experimenting with weighing deltaNO}
+
+weights = seq(-1,1,0.001)
+#weights = c(0)
+
+cors = c()
+off.cors = c()
+
+for (i in weights) {
+  
+ # deltaNO2minus3 = ((1+i)*(pfn.sparc.stats$NO2_R - pfn.sparc.stats$NO2_L) + (1-i)*(pfn.sparc.stats$NO3_L  -  pfn.sparc.stats$NO3_R))/((1+i)*(pfn.sparc.stats$NO2_R + pfn.sparc.stats$NO2_L)+(i-1)*(pfn.sparc.stats$NO3_R + pfn.sparc.stats$NO3_L))
+  deltaNO2minus3 = -((1-i)*pfn.sparc.stats$NO2_R + (1+i)*pfn.sparc.stats$NO3_L -(1-i)*pfn.sparc.stats$NO2_L - (1+i)*pfn.sparc.stats$NO3_R) / ((1-i)*pfn.sparc.stats$NO2_R+(1-i)*pfn.sparc.stats$NO2_L+(1+i)*pfn.sparc.stats$NO3_R+ (1+i)*pfn.sparc.stats$NO3_L)
+  
+  
+  cors = append(cors,cor(deltaNO2minus3,pfn.sparc.stats$on_angular_velocity,method = "pearson",use="complete.obs"))
+  off.cors = append(off.cors,cor(deltaNO2minus3,pfn.sparc.stats$off_angular_velocity,method = "pearson",use="complete.obs"))
+  
+}
+
+cor.plot.data = data.frame(correlation = cors,weights = weights,light_off_correlation = off.cors)
+
+ymax = max(c(cors,off.cors),na.rm=TRUE)
+ymin = min(c(cors,off.cors),na.rm=TRUE)
+
+max.delta = weights[which(cor.plot.data$correlation==max(cor.plot.data$correlation))]
+
+
+ggplot(cor.plot.data,aes(x=weights,y=correlation,color=weights))+
+  geom_vline(xintercept = max.delta,size=0.8,linetype="dashed", col= 'black')+
+  geom_line(size=1.5)+
+  scale_color_scico(palette = "roma",limits =c(-1,1))+
+  ylim(c(ymin,ymax))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size = 1,linetype = "solid"),
+        axis.line.x = element_line(size = 1, linetype = "solid"),  
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+
+ggplot(cor.plot.data,aes(x=weights,y=light_off_correlation,color=weights))+
+  geom_line(size=1.5)+
+  scale_color_scico(palette = "roma",limits =c(-1,1))+
+  ylim(c(ymin,ymax))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size = 1,linetype = "solid"),
+        axis.line.x = element_line(size = 1, linetype = "solid"),  
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+```
+
+
+
+Fig. S4
+
+```{r}
+
+PFN_bulk_data_path = "path/to/data"
+PFN_bulk_opto_frames = "path/to/opto/frames"
+output_dir = "output/directory"
+
+sparc_anatomy_dir = "path/to/sparc/anatomy"
+
+```
+
+```{r}
+
+PFN_bulk_opto = opto_csv_to_list(PFN_bulk_data_path,PFN_bulk_opto_frames)
+PFN_bulk_opto = calculate_velocity_values(PFN_bulk_opto)
+PFN_bulk_opto = smooth_velocity_values_list(PFN_bulk_opto,10)
+
+```
+
+```{r}
+
+PFN_bulk_summary = stats_matrix_from_list_opto_single(PFN_bulk_opto,c("Driver","ATR","Replicate"))
+
+```
+
+```{r}
+
+PFN_bulk_bouts = sep_opto_exp_list_to_bouts(PFN_bulk_opto,c("Driver","ATR","Replicate"))
+
+```
+
+
+```{r}
+
+PFN_bulk_bouts_summary = summarySE(data = PFN_bulk_bouts,
+                                         measurevar = "Translational",
+                                         groupvars = c("Time","ATR","Driver"),
+                                         na.rm = TRUE)
+
+PFNd_bulk_bouts_summary = subset(PFN_bulk_bouts_summary, subset = Driver == "PFNdbulk")
+PFNa_bulk_bouts_summary = subset(PFN_bulk_bouts_summary, subset = Driver == "PFNabulk")
+
+```
+
+
+```{r}
+
+data_rect = data.frame(on = 20,off=40)
+
+PFNa_bulk_translational_line_plot=ggplot(PFNa_bulk_bouts_summary,aes(x=Time,y=Translational,linetype = ATR))+
+  geom_rect(data = data_rect, inherit.aes = FALSE, aes(xmin = on,xmax =off, ymin = 0, ymax = 0.6),
+            color="transparent",
+            alpha = 0.3,
+            fill = "#f194a3")+
+  geom_line()+
+  geom_ribbon(aes(x=Time,ymin = Translational-se,ymax = Translational+se),alpha=0.3)+
+  scale_linetype_manual(values = c("dashed","solid"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15),
+        legend.position = "none")
+  
+PFNd_bulk_translational_line_plot=ggplot(PFNd_bulk_bouts_summary,aes(x=Time,y=Translational,linetype = ATR))+
+  geom_rect(data = data_rect, inherit.aes = FALSE, aes(xmin = on,xmax =off, ymin = 0, ymax = 0.6),
+            color="transparent",
+            alpha = 0.3,
+            fill = "#f194a3")+
+  geom_line()+
+  geom_ribbon(aes(x=Time,ymin = Translational-se,ymax = Translational+se),alpha=0.3)+
+  scale_linetype_manual(values = c("dashed","solid"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15),
+        legend.position = "none")
+
+
+setwd(output_dir)
+
+ggsave(PFNa_bulk_translational_line_plot,file="PFNa bulk translational velocity line plot.svg",width=8,height=4)
+ggsave(PFNd_bulk_translational_line_plot,file="PFNd bulk translational velocity line plot.svg",width=8,height=4)
+  
+
+```
+
+
+```{r}
+
+per_phase_PFN_summary = summarySE(data = PFN_bulk_bouts,
+                                         measurevar = "Translational",
+                                         groupvars = c("Phase","ATR","Driver","Replicate"),
+                                         na.rm = TRUE)
+
+per_phase_PFN_summary = per_phase_PFN_summary %>%
+  mutate(Phase = fct_relevel(Phase, "Pre","Light on","Post"))
+
+per_phase_PFNa_summary = subset(per_phase_PFN_summary, subset = Driver == "PFNabulk")
+per_phase_PFNd_summary = subset(per_phase_PFN_summary, subset = Driver == "PFNdbulk")
+
+
+```
+
+```{r}
+
+
+
+PFNa_bulk_trans_box = ggplot(per_phase_PFNa_summary,aes(x=ATR,fill=Phase,y=Translational))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("#8491b450","#d1495b","#2e4057"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15),
+        legend.position = "none")
+
+PFNd_bulk_trans_box = ggplot(per_phase_PFNd_summary,aes(x=ATR,fill=Phase,y=Translational))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("#8491b450","#d1495b","#2e4057"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15),
+        legend.position = "none")
+
+setwd(output_dir)
+
+ggsave(PFNa_bulk_trans_box,file="PFNa bulk translational velocity boxplot.svg",width=4,height=4)
+ggsave(PFNd_bulk_trans_box,file="PFNd bulk translational velocity boxplot.svg",width=4,height=4)
+
+```
+
+```{r}
+
+per_phase_PFN_summary_angular = summarySE(data = PFN_bulk_bouts,
+                                         measurevar = "Absolute_angular",
+                                         groupvars = c("Phase","ATR","Driver","Replicate"),
+                                         na.rm = TRUE)
+
+per_phase_PFN_summary_angular = per_phase_PFN_summary_angular %>%
+  mutate(Phase = fct_relevel(Phase, "Pre","Light on","Post"))
+
+per_phase_PFNa_summary_angular = subset(per_phase_PFN_summary_angular, subset = Driver == "PFNabulk")
+per_phase_PFNd_summary_angular = subset(per_phase_PFN_summary_angular, subset = Driver == "PFNdbulk")
+
+```
+
+
+```{r}
+
+PFNa_bulk_ang_box = ggplot(per_phase_PFNa_summary_angular,aes(x=ATR,fill=Phase,y=Absolute_angular))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("#8491b450","#d1495b","#2e4057"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15),
+        legend.position = "none")
+
+PFNd_bulk_ang_box = ggplot(per_phase_PFNd_summary_angular,aes(x=ATR,fill=Phase,y=Absolute_angular))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("#8491b450","#d1495b","#2e4057"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15),
+        legend.position = "none")
+
+setwd(output_dir)
+
+ggsave(PFNa_bulk_ang_box,file="PFNa bulk angular velocity boxplot.svg",width=4,height=4)
+ggsave(PFNd_bulk_ang_box,file="PFNd bulk angular velocity boxplot.svg",width=4,height=4)
+
+```
+
+```{r}
+
+sparse_sym_data_path = "path/to/data"
+parse_sym_opto_frames = "path/to/opto/frames"
+output_dir = "output/directory"
+
+sparc_anatomy_dir = "path/to/sparc/anatomy"
+
+```
+
+```{r}
+
+pfn.sparse.chrimson.smoothed = opto_csv_to_list(sparse_sym_data_path,parse_sym_opto_frames)
+pfn.sparse.chrimson.smoothed = calculate_velocity_values(pfn.sparse.chrimson.smoothed)
+pfn.sparse.chrimson.smoothed = smooth_velocity_values_list(pfn.sparse.chrimson.smoothed,10)
+
+```
+
+
+```{r generate dfs}
+
+pfn.sparse.gal4.data = sep_opto_exp_list_to_bouts(pfn.sparse.chrimson.smoothed,c("Driver","ATR","Replicate"))
+
+```
+
+```{r}
+
+pfn.sparse.gal4.timecourse.trans  = summarySE(data = pfn.sparse.gal4.data,
+                                        groupvars = c("ATR","Time"),
+                                        measurevar = "Translational",
+                                        na.rm = TRUE)
+
+pfn.sparse.gal4.timecourse.ang = summarySE(data = pfn.sparse.gal4.data,
+                                        groupvars = c("ATR","Time"),
+                                        measurevar = "Absolute_angular",
+                                        na.rm = TRUE)
+
+```
+
+```{r}
+
+pfn.sparse.gal4.timecourse.trans$ATR = factor(pfn.sparse.gal4.timecourse.trans$ATR, levels = c("ATRplus","ATRminus"))
+
+pfn.sparse.gal4.timecourse.ang$ATR = factor(pfn.sparse.gal4.timecourse.ang$ATR, levels = c("ATRplus","ATRminus"))
+
+
+```
+
+```{r}
+
+rects = data.frame(start = 20,end=40)
+
+ymax = max((pfn.sparse.gal4.timecourse.trans$Translational+pfn.sparse.gal4.timecourse.trans$se),na.rm = TRUE)
+
+
+ggplot(pfn.sparse.gal4.timecourse.trans,aes(x=Time, y = Translational, color = ATR))+
+  geom_hline(yintercept = 0,linetype="dashed",col="black")+
+  geom_rect(data=rects, inherit.aes=FALSE, 
+            aes(xmin=start, 
+                xmax=end, 
+                ymin=0, 
+                ymax=ymax), 
+            color="transparent", fill="#f194a3", alpha=0.3)+
+  geom_errorbar(aes(ymin=Translational-se,ymax=Translational+se),alpha=0.1)+
+  geom_line(size=1,alpha = 0.8)+
+  scale_color_manual(values=c("#9de0ad","#547980"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+ymax = max((pfn.sparse.gal4.timecourse.ang$Absolute_angular+pfn.sparse.gal4.timecourse.ang$se),na.rm = TRUE)
+
+
+ggplot(pfn.sparse.gal4.timecourse.ang,aes(x=Time, y = Absolute_angular, color = ATR))+
+  geom_hline(yintercept = 0,linetype="dashed",col="black")+
+  geom_rect(data=rects, inherit.aes=FALSE, 
+            aes(xmin=start, 
+                xmax=end,
+                ymin=0, 
+                ymax=ymax), 
+            color="transparent", fill="#f194a3", alpha=0.3)+
+  geom_errorbar(aes(ymin=Absolute_angular-se,ymax=Absolute_angular+se),alpha=0.1)+
+  geom_line(size=1,alpha = 0.8)+
+  scale_color_manual(values=c("#9de0ad","#547980"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+
+```
+
+
+
+Fig. S5
+
+```{r}
+
+sparc_I_data_path = "path/to/data"
+sparc_I_opto_frames = "path/to/opto/frames"
+output_dir = "output/directory"
+
+sparc_anatomy_dir = "path/to/sparc/anatomy"
+
+```
+
+```{r}
+
+PFN_I_exps = opto_csv_to_list(sparc_I_data_path,sparc_I_opto_frames)
+PFN_I_exps = calculate_velocity_values(PFN_I_exps)
+PFN_I_exps = smooth_velocity_values_list(PFN_I_exps,10)
+
+```
+
+```{r}
+
+vnc_activation_example = opto.single.trial.line.plot(PFN_I_exps$Fly14,1)
+
+setwd(output_dir)
+
+ggsave(vnc_activation_example[[1]],file = "SPARC I fly14 trans vel line plot.svg",height = 4,width = 6)
+
+```
+
+```{r}
+
+PFN_I_summary$VNC_signal = "no VNC"
+PFN_I_summary$VNC_signal[which(PFN_I_summary$Replicate %in% c("Fly02","Fly14","Fly10"))] = "present"
+PFN_I_summary$VNC_signal[which(PFN_I_summary$Replicate %in% c("Fly04","Fly05","Fly06","Fly07","Fly08","Fly15","Fly17"))] = "not present"
+
+```
+
+
+```{r}
+
+VNC_sparc_trans_vel_box = ggplot(subset(PFN_I_summary,subset=VNC_signal!="no VNC"),aes(x=VNC_signal,y=delta_translational_velocity))+
+  geom_boxplot()+
+  geom_point()+
+  theme_minimal()
+
+VNC_sparc_ang_vel_box = ggplot(subset(PFN_I_summary,subset=VNC_signal!="no VNC"),aes(x=VNC_signal,y=delta_absolute_angular_velocity))+
+  geom_boxplot()+
+  geom_point()+
+  theme_minimal()
+
+setwd(output_dir)
+
+ggsave(VNC_sparc_trans_vel_box, file = "VNC comparison trans vel box.svg",width=4,height=4)
+ggsave(VNC_sparc_ang_vel_box, file = "VNC comparison ang vel box.svg",width=4,height=4)
+
+```
+
+```{r}
+
+x = subset(PFN_I_summary,subset=VNC_signal!="no VNC")
+pairwise.t.test(x$delta_translational_velocity,x$VNC_signal)
+pairwise.t.test(x$delta_absolute_angular_velocity,x$VNC_signal)
+
+```
+
+sparse+symmetric PFN driver
+
+```{r}
+
+pfn.sparse.gal4.data = sep_opto_exp_list_to_bouts(pfn.sparse.chrimson.smoothed,c("Driver","ATR","Replicate"))
+
+```
+
+```{r}
+
+pfn.sparse.gal4.timecourse.trans  = summarySE(data = pfn.sparse.gal4.data,
+                                        groupvars = c("ATR","Time"),
+                                        measurevar = "Translational",
+                                        na.rm = TRUE)
+
+pfn.sparse.gal4.timecourse.ang = summarySE(data = pfn.sparse.gal4.data,
+                                        groupvars = c("ATR","Time"),
+                                        measurevar = "Absolute_angular",
+                                        na.rm = TRUE)
+
+```
+
+```{r}
+
+pfn.sparse.gal4.timecourse.trans$ATR = factor(pfn.sparse.gal4.timecourse.trans$ATR, levels = c("ATRplus","ATRminus"))
+
+pfn.sparse.gal4.timecourse.ang$ATR = factor(pfn.sparse.gal4.timecourse.ang$ATR, levels = c("ATRplus","ATRminus"))
+
+
+```
+
+```{r }
+
+rects = data.frame(start = 20,end=40)
+
+ymax = max((pfn.sparse.gal4.timecourse.trans$Translational+pfn.sparse.gal4.timecourse.trans$se),na.rm = TRUE)
+
+
+sparse_sym_trans_lineplot = ggplot(pfn.sparse.gal4.timecourse.trans,aes(x=Time, y = Translational, color = ATR))+
+  geom_hline(yintercept = 0,linetype="dashed",col="black")+
+  geom_rect(data=rects, inherit.aes=FALSE, 
+            aes(xmin=start, 
+                xmax=end, 
+                ymin=0, 
+                ymax=0.6), 
+            color="transparent", fill="#f194a3", alpha=0.3)+
+  geom_ribbon(aes(ymin=Translational-se,ymax=Translational+se,fill=ATR),color=NA,alpha=0.3)+
+  geom_line(size=1,alpha = 0.8)+
+  scale_color_manual(values=c("#9de0ad","#547980"))+
+  scale_fill_manual(values=c("#9de0ad","#547980"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+ymax = max((pfn.sparse.gal4.timecourse.ang$Absolute_angular+pfn.sparse.gal4.timecourse.ang$se),na.rm = TRUE)
+
+
+sparse_sym_ang_lineplot = ggplot(pfn.sparse.gal4.timecourse.ang,aes(x=Time, y = Absolute_angular, color = ATR))+
+  geom_hline(yintercept = 0,linetype="dashed",col="black")+
+  geom_rect(data=rects, inherit.aes=FALSE, 
+            aes(xmin=start, 
+                xmax=end,
+                ymin=0, 
+                ymax=ymax), 
+            color="transparent", fill="#f194a3", alpha=0.3)+
+  geom_ribbon(aes(ymin=Absolute_angular-se,ymax=Absolute_angular+se,fill=ATR),color=NA,alpha=0.3)+
+  geom_line(size=1,alpha = 0.8)+
+  scale_color_manual(values=c("#9de0ad","#547980"))+
+  scale_fill_manual(values=c("#9de0ad","#547980"))+
+  theme_minimal()+
+  theme(axis.line.y = element_line(size=1,linetype = "solid"),
+        axis.text.y = element_text(face="bold",size=15),
+        axis.text.x = element_text(face="bold",size=15))
+
+setwd(output_dir)
+
+ggsave(sparse_sym_trans_lineplot, file = "sparse symmetric PFN activation translational velocity lineplot.svg",height=4,width=6)
+ggsave(sparse_sym_ang_lineplot, file = "sparse symmetric PFN activation absolute angular velocity lineplot.svg",height=4,width=6)
+
+```
+
